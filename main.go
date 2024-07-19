@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
+	"crypto/tls"
+	"net/http"
 	"github.com/xanzy/go-gitlab"
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 func main() {
@@ -32,8 +34,20 @@ func getMergeRequests() (mrs []*gitlab.MergeRequest, e error) {
 	}
 
 	var apiCustUrl = fmt.Sprintf(gitlabInstance + "/api/v4")
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
 
-	git, err := gitlab.NewClient(authToken, gitlab.WithBaseURL(apiCustUrl))
+	retryClient := retryablehttp.NewClient()
+	retryClient.HTTPClient.Transport = tr
+	gitlabOptions := []gitlab.ClientOptionFunc{
+		gitlab.WithBaseURL(apiCustUrl),
+	}
+	gitlabOptions = append(gitlabOptions, gitlab.WithHTTPClient(retryClient.HTTPClient))
+
+	git, err := gitlab.NewClient(authToken, gitlabOptions...)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create client: %v", err)
